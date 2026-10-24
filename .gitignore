@@ -1,0 +1,46 @@
+# Local OS and editor state
+.DS_Store
+.vscode/
+.idea/
+
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node / extension build output
+node_modules/
+out/
+dist/
+build/
+*.vsix
+
+# Credentials and local runtime state
+.env
+.env.*
+!.env.example
+.cache/
+*.log
+
+# Downloaded weights and checkpoints
+models/
+checkpoints/
+*.safetensors
+*.pt
+*.pth
+*.bin
+
+# Downloaded datasets and tokenizers (fetch with patchsprint/scripts/download_data.sh)
+patchsprint/data/raw/
+
+# Large raw experiment artifacts
+results/**/raw/
+*.nsys-rep
+*.ncu-rep

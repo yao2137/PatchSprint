@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PatchSprint Proposal</title>
+<style>
+  @page { size: Letter; margin: 0.6in 0.7in; }
+  html, body { background: #fff; color: #000; }
+  body {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 11pt;
+    line-height: 1.15;
+    margin: 0;
+  }
+  h1 { font-size: 13pt; text-align: center; margin: 0 0 2pt 0; }
+  .authors { text-align: center; margin: 0 0 6pt 0; }
+  h2 { font-size: 11pt; margin: 4pt 0 1pt 0; }
+  p { margin: 0 0 3pt 0; text-align: justify; }
+  .todo { background: #fff3a0; }
+  ol.refs { margin: 0; padding-left: 2.0em; font-size: 10pt; }
+  ol.refs li { margin: 0 0 1pt 0; }
+  ol.refs { list-style: none; counter-reset: ref; padding-left: 0; }
+  ol.refs li { counter-increment: ref; padding-left: 2.0em; text-indent: -2.0em; }
+  ol.refs li::before { content: "[" counter(ref) "] "; }
+</style>
+</head>
+<body>
+
+<h1>PatchSprint: Edit-Aware Speculative Decoding for Fast LLM Code Editing</h1>
+<div class="authors">Yao Huang &mdash; <span class="todo">[Expected degree, e.g., M.S. in Computer Science]</span>, <span class="todo">[Year in program]</span></div>
+
+<h2>Problem Description</h2>
+<p>When a developer asks a large language model (LLM) to modify code, for example &ldquo;add timeouts and error handling to these API calls while keeping the existing interface,&rdquo; the model usually regenerates the whole file even though most of its output is copied verbatim from the input. Autoregressive decoding produces one token per forward pass, and at small batch sizes each pass is limited by memory bandwidth rather than compute, so the user waits while the model re-emits hundreds of unchanged lines. Cursor&rsquo;s speculative edits [5] and OpenAI&rsquo;s Predicted Outputs [6] exploit this redundancy, but their designs are proprietary and their behavior under load is unreported.</p>
+<p>PatchSprint is an open-source code-editing assistant composed of a lightweight VS Code extension and a self-hosted inference backend. The project asks: how much end-to-end editing latency can an edit-aware speculative decoding proposer remove, without changing the model&rsquo;s output, and for which edit types and concurrency levels does the speedup hold or disappear?</p>
+
+<h2>Data Summary</h2>
+<p>The primary benchmark is CanItEdit [7], which contains 105 hand-crafted Python editing problems with descriptive and lazy instructions and hidden test suites, so both speed and functional correctness can be measured. I will add 20&ndash;30 tasks from open-source Python repositories to cover realistic file lengths. At run time, the input is a source file, an optional selection, and a natural-language instruction; the output is the edited file, its diff, and the result of the project&rsquo;s existing tests. Target models are instruction-tuned Qwen2.5-Coder [8] at 7B (primary), 14B, and 32B, which share one tokenizer for a controlled scaling study.</p>
+
+<h2>Methods</h2>
+<p>In speculative decoding [1], the target model verifies <i>k</i> proposed tokens in one forward pass and keeps the longest prefix that matches its own greedy choices, so the output is unchanged up to floating-point effects. PatchSprint replaces the draft model with an edit-aware proposer that keeps an alignment pointer into the original file, proposes upcoming source tokens while the model reproduces code, and re-synchronizes after each edit. Unlike stateless prompt lookup [3] or acceptance-driven suffix trees [4], the draft length will also account for the measured verification cost at the current batch size. The proposer will be validated in a reference decoding loop built on Hugging Face Transformers and then integrated into vLLM [2] on an NVIDIA B200 GPU (Northeastern HPC). Baselines are standard decoding, vLLM&rsquo;s n-gram and suffix proposers, and diff-format generation; metrics are latency, accepted length, throughput versus concurrency, exact match with greedy decoding, and test pass rate. Expected challenges include tokenization mismatches at edit boundaries, repeated code that creates ambiguous matches, and per-request proposer state inside vLLM&rsquo;s batched scheduler.</p>
+
+<h2>Preliminary Results</h2>
+<p>vLLM&rsquo;s n-gram proposer is stateless, searches the entire context including the instruction, and resolves ties toward the earliest match, while its dynamic mode picks <i>k</i> from a hand-configured batch-size table. I then replayed speculative decoding on CanItEdit with the Qwen2.5-Coder tokenizer, treating each reference solution as the model output (assuming the model reproduces the reference and memory-bound verification). A median of 81% of output tokens are copied from the input in spans of at least 8 tokens; tokenization at edit boundaries loses only about 1.5%. At <i>k</i>&nbsp;=&nbsp;16, an oracle that copies optimally from the context needs 8.4&times; fewer decoding steps; a vLLM-style n-gram proposer reaches 4.9&times; while verifying 1.86 tokens per output token, and an early pointer prototype with n-gram fallback reaches 5.1&times; at 1.75. The oracle gap and the cost of rejected drafts under load are the project&rsquo;s targets. <span class="todo">[To be filled: wall-clock comparison of standard versus n-gram decoding for Qwen2.5-Coder-7B on the B200.]</span></p>
+
+<h2>References</h2>
+<ol class="refs">
+  <li>Y. Leviathan, M. Kalman, and Y. Matias. Fast Inference from Transformers via Speculative Decoding. In <i>Proc. ICML</i>, 2023.</li>
+  <li>W. Kwon et al. Efficient Memory Management for Large Language Model Serving with PagedAttention. In <i>Proc. SOSP</i>, 2023.</li>
+  <li>A. Saxena. Prompt Lookup Decoding. GitHub repository, https://github.com/apoorvumang/prompt-lookup-decoding, 2023.</li>
+  <li>G. Oliaro et al. SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications. In <i>Proc. NeurIPS</i>, 2025.</li>
+  <li>Cursor. Editing Files at 1000 Tokens per Second. https://cursor.com/blog/instant-apply, 2024.</li>
+  <li>OpenAI. Predicted Outputs. https://developers.openai.com/api/docs/guides/predicted-outputs, accessed Oct. 2026.</li>
+  <li>F. Cassano et al. Can It Edit? Evaluating the Ability of Large Language Models to Follow Code Editing Instructions. arXiv:2312.12450, 2023.</li>
+  <li>B. Hui et al. Qwen2.5-Coder Technical Report. arXiv:2409.12186, 2024.</li>
+</ol>
+
+</body>
+</html>

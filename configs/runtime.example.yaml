@@ -1,0 +1,30 @@
+# Design example only: no runtime currently consumes this file.
+model:
+  model_id: Qwen/Qwen2.5-Coder-7B-Instruct
+  revision: null  # Pin before reproducible experiments.
+  dtype: bfloat16
+  kv_cache_dtype: auto
+  quantization: null
+  max_context_tokens: 16384
+
+runtime:
+  backend: reference
+  tensor_parallel_size: 1
+  max_concurrent_requests: 1
+  max_input_tokens: 8192
+  max_new_tokens: 4096
+
+decoding:
+  mode: greedy
+  method: edit_aware
+  proposer_max_tokens: 32
+  adaptive_proposal: false
+
+editing:
+  language: python
+  output_format: full_file
+  require_document_version_match: true
+
+observability:
+  request_metrics: true
+  detailed_trace: false

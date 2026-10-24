@@ -1,5 +1,6 @@
 matplotlib==3.11.2
-numpy==2.5.4
+# Range keeps this installable in the vLLM 0.32 env (mistral_common needs numpy<2.4, numba <2.5)
+numpy>=2.3,<2.4
 pandas==3.0.6
 pyarrow==26.0.0
 pytest==9.1.1
